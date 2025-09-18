@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter pub:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(move libcoreworkflow_engine.dart libcoreworkflow_engine_backup.dart)",
+      "Bash(move libcoreworkflow_engine_fixed.dart libcoreworkflow_engine.dart)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

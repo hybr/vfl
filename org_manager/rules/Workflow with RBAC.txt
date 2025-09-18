@@ -1,0 +1,2164 @@
+# Comprehensive Workflow System Architecture with Enhanced RBAC
+
+**Version:** 2.0  
+**Date:** September 2025  
+**Author:** System Architecture Team
+
+## Table of Contents
+
+1. [Executive Summary](#executive-summary)
+2. [Design Philosophy](#design-philosophy)
+3. [Core Architecture Patterns](#core-architecture-patterns)
+4. [System Components](#system-components)
+5. [Enhanced RBAC System](#enhanced-rbac-system)
+6. [Database Design](#database-design)
+7. [Permission Resolution & Workflow Integration](#permission-resolution--workflow-integration)
+8. [API Architecture](#api-architecture)
+9. [Event-Driven Communication](#event-driven-communication)
+10. [Scalability & Performance](#scalability--performance)
+11. [Security & Audit](#security--audit)
+12. [Integration Patterns](#integration-patterns)
+13. [Development Guidelines](#development-guidelines)
+14. [Testing Strategy](#testing-strategy)
+15. [Deployment Architecture](#deployment-architecture)
+16. [Monitoring & Observability](#monitoring--observability)
+17. [Migration Strategy](#migration-strategy)
+
+---
+
+## Executive Summary
+
+This document outlines a comprehensive architecture for a scalable, extensible workflow management system with sophisticated role-based access control. The system employs object-oriented design patterns, state machines, event-driven architecture, and multi-dimensional RBAC to create maintainable, testable, and robust enterprise workflow solutions.
+
+### Key Architectural Decisions
+
+- **Inheritance-based workflow design** for code reusability and consistency
+- **State machine pattern** for clear process flow and transition management  
+- **Event-driven architecture** for loose coupling and system integration
+- **Multi-dimensional RBAC** based on organizational structure and workflow context
+- **Database-first approach** with comprehensive audit trails
+- **Microservices architecture** for horizontal scalability
+
+### System Capabilities
+
+- **Complex Organizational Modeling**: Physical (Organization→Branch→Building→Seat) and logical (Department→Team) hierarchies
+- **Dynamic Permission Evaluation**: Context-aware permissions considering workflow data, business rules, and organizational constraints
+- **Enterprise Scalability**: Designed for high-throughput, multi-tenant environments
+- **Comprehensive Auditability**: Complete trails for compliance and security
+
+---
+
+## Design Philosophy
+
+### Core Principles
+
+1. **Separation of Concerns**: Business logic, data persistence, presentation, and security layers are clearly separated
+2. **Single Responsibility**: Each class and component has one well-defined purpose
+3. **Open/Closed Principle**: System is open for extension but closed for modification
+4. **Composability**: Components can be combined and reused across different workflows
+5. **Security by Design**: Permission checks integrated at every level
+6. **Testability**: All components designed for comprehensive testing
+
+### Design Goals
+
+- **Maintainability**: Code should be easy to understand, modify, and extend
+- **Scalability**: System should handle increasing loads and complexity
+- **Reliability**: Workflows should be fault-tolerant and recoverable
+- **Auditability**: All actions and state changes must be trackable
+- **Flexibility**: Support for diverse organizational processes and requirements
+- **Security**: Fine-grained access control with comprehensive audit trails
+
+---
+
+## Core Architecture Patterns
+
+### 1. Inheritance Hierarchy
+
+```javascript
+BaseWorkflow (Abstract)
+├── UserAuthWorkflow
+├── HireWorkflow  
+├── DocumentApprovalWorkflow
+├── ExpenseApprovalWorkflow
+├── ProjectApprovalWorkflow
+└── ProcurementWorkflow
+```
+
+**Benefits:**
+- Common functionality implemented once in the base class
+- Consistent interface across all workflow types
+- Easy to add new workflow types
+- Polymorphic behavior support
+- Integrated RBAC validation
+
+### 2. State Machine Pattern with RBAC
+
+Each workflow implements a finite state machine with:
+- **States**: Discrete workflow stages with defined behavior and permission requirements
+- **Transitions**: Allowed movements between states with RBAC validation
+- **Actions**: Operations performed during state entry/exit with audit logging
+- **Guards**: Conditions and permissions that must be met for transitions
+
+```javascript
+class StateNode {
+  constructor(name, options) {
+    this.name = name;
+    this.transitions = options.transitions || [];
+    this.validations = options.validations || [];
+    this.requiredActors = options.requiredActors || [];
+    this.permissionConditions = options.permissionConditions || {};
+    this.onEnter = options.onEnter;
+    this.onExit = options.onExit;
+  }
+}
+```
+
+### 3. Multi-Dimensional RBAC Pattern
+
+```
+WorkflowPermission = WorkflowActor + OrganizationGroup + OrganizationDesignation + Context
+OrganizationPosition = OrganizationGroup + OrganizationDesignation + OrganizationWorkerSeat
+OrganizationGroup = (OrganizationDepartment | OrganizationTeam)
+```
+
+### 4. Event-Driven Architecture
+
+Workflows emit events that other components can listen to:
+- UI components react to state changes
+- RBAC system validates and logs permission checks
+- External systems receive notifications
+- Audit systems log all activities
+- Analytics systems track workflow metrics
+
+---
+
+## System Components
+
+### Core Classes
+
+#### BaseWorkflow
+**Purpose**: Abstract base class providing common workflow functionality with integrated RBAC
+
+**Responsibilities:**
+- State management and transition validation
+- RBAC permission checking before state transitions
+- Event emission and listener management  
+- Context data management
+- History tracking with user attribution
+- Permission validation and audit logging
+
+**Key Methods:**
+```javascript
+class BaseWorkflow {
+  addState(stateName, stateNode)
+  setState(stateName, context)
+  transitionWithPermissionCheck(targetState, actorRole, userId, context)
+  on(eventName, callback)
+  emit(eventName, data)
+  getCurrentState()
+  reset()
+  getAvailableActionsForUser(userId)
+}
+```
+
+#### EnhancedStateNode
+**Purpose**: Represents workflow states with integrated permission requirements
+
+**Responsibilities:**
+- Define valid transitions with permission constraints
+- Validate transition conditions including RBAC
+- Execute entry and exit actions with audit logging
+- Enforce multi-dimensional access control
+
+#### RBACPermissionResolver
+**Purpose**: Core RBAC engine for permission resolution
+
+**Responsibilities:**
+- Multi-dimensional permission checking
+- Organizational context evaluation
+- Dynamic permission computation based on workflow data
+- Permission caching and optimization
+- Audit trail generation
+
+#### WorkflowEngine
+**Purpose**: Orchestrates workflow execution with security enforcement
+
+**Responsibilities:**
+- Create and manage workflow instances
+- Handle concurrent workflow execution with proper locking
+- Manage workflow persistence with audit trails
+- Coordinate between different workflows
+- Enforce permission boundaries
+
+### Supporting Components
+
+#### OrganizationalContextManager
+- Maps users to organizational positions
+- Manages department/team hierarchies
+- Handles worker seat assignments
+- Provides organizational lookup services
+
+#### ValidationEngine
+- Implements business rule validation
+- Supports both synchronous and asynchronous validations
+- Configurable validation chains
+- Custom validation rule definition
+- Permission-aware validation
+
+#### NotificationService
+- Multi-channel notification delivery (email, SMS, push)
+- Template-based message generation
+- Delivery status tracking
+- Integration with external notification providers
+- Permission-based notification filtering
+
+---
+
+## Enhanced RBAC System
+
+### Organizational Structure Model
+
+```
+Organization
+├── OrganizationBranches
+│   └── OrganizationBuildings
+│       └── OrganizationWorkerSeats
+├── OrganizationDepartments
+│   ├── OrganizationTeams
+│   └── OrganizationGroupDesignations
+└── Users
+    └── OrganizationPositions (via UserPositionAssignments)
+```
+
+### RBAC Entity Relationships
+
+```mermaid
+erDiagram
+    Organization ||--o{ OrganizationBranch : has
+    Organization ||--o{ OrganizationDepartment : contains
+    OrganizationBranch ||--o{ OrganizationBuilding : contains
+    OrganizationBuilding ||--o{ OrganizationWorkerSeat : contains
+    OrganizationDepartment ||--o{ OrganizationTeam : contains
+    OrganizationDepartment ||--o{ OrganizationGroupDesignation : has
+    OrganizationTeam ||--o{ OrganizationGroupDesignation : has
+    OrganizationPosition ||--|| OrganizationWorkerSeat : occupies
+    OrganizationPosition ||--|| OrganizationGroupDesignation : holds
+    User ||--o{ OrganizationPosition : assigned
+    WorkflowStep ||--o{ WorkflowPermission : requires
+    WorkflowPermission ||--|| WorkflowActor : uses
+    WorkflowPermission ||--|| OrganizationGroup : applies_to
+    WorkflowPermission ||--|| OrganizationDesignation : requires
+```
+
+### Workflow Actors
+
+The system defines standard workflow actors that map to organizational roles:
+
+- **Requestor**: Initiates workflow requests
+- **Analyzer**: Analyzes and reviews requests  
+- **Approver**: Approves or rejects requests
+- **Designer**: Creates designs and specifications
+- **Developer**: Implements solutions
+- **Tester**: Tests and validates solutions
+- **Implementor**: Deploys and implements
+- **Supporter**: Provides support and maintenance
+
+---
+
+## Database Design
+
+### Core Workflow Tables
+
+#### workflows
+```sql
+CREATE TABLE workflows (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    version INTEGER NOT NULL DEFAULT 1,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    created_by UUID REFERENCES users(id),
+    workflow_definition JSONB NOT NULL,
+    rbac_enabled BOOLEAN DEFAULT true
+);
+```
+
+#### workflow_instances
+```sql
+CREATE TABLE workflow_instances (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workflow_id UUID REFERENCES workflows(id),
+    current_state VARCHAR(100) NOT NULL,
+    context_data JSONB,
+    initiator_user_id UUID REFERENCES users(id),
+    organization_id UUID REFERENCES organizations(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    status VARCHAR(50) DEFAULT 'active'
+);
+```
+
+#### workflow_steps
+```sql
+CREATE TABLE workflow_steps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workflow_id UUID NOT NULL REFERENCES workflows(id),
+    step_name VARCHAR(255) NOT NULL,
+    step_order INTEGER NOT NULL,
+    step_type VARCHAR(100), -- 'approval', 'task', 'decision', 'parallel'
+    required_actors JSONB, -- Array of required actor names
+    optional_actors JSONB, -- Array of optional actor names
+    step_conditions JSONB, -- Conditions for step execution
+    timeout_hours INTEGER,
+    is_parallel BOOLEAN DEFAULT false,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### workflow_history
+```sql
+CREATE TABLE workflow_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    instance_id UUID REFERENCES workflow_instances(id),
+    from_state VARCHAR(100),
+    to_state VARCHAR(100) NOT NULL,
+    action VARCHAR(100),
+    context_data JSONB,
+    performed_by UUID REFERENCES users(id),
+    actor_role VARCHAR(100),
+    permission_context JSONB,
+    performed_at TIMESTAMP DEFAULT NOW(),
+    reason TEXT
+);
+```
+
+### Organizational Structure Tables
+
+#### organizations
+```sql
+CREATE TABLE organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### organization_branches
+```sql
+CREATE TABLE organization_branches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id),
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    address TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(organization_id, code)
+);
+```
+
+#### organization_buildings
+```sql
+CREATE TABLE organization_buildings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    branch_id UUID NOT NULL REFERENCES organization_branches(id),
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    address TEXT,
+    floors INTEGER,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(branch_id, code)
+);
+```
+
+#### organization_worker_seats
+```sql
+CREATE TABLE organization_worker_seats (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    building_id UUID NOT NULL REFERENCES organization_buildings(id),
+    seat_number VARCHAR(50) NOT NULL,
+    floor INTEGER,
+    section VARCHAR(100),
+    is_occupied BOOLEAN DEFAULT false,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(building_id, seat_number)
+);
+```
+
+#### organization_departments
+```sql
+CREATE TABLE organization_departments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id),
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    description TEXT,
+    parent_department_id UUID REFERENCES organization_departments(id),
+    head_user_id UUID REFERENCES users(id),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(organization_id, code)
+);
+```
+
+#### organization_teams
+```sql
+CREATE TABLE organization_teams (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    department_id UUID NOT NULL REFERENCES organization_departments(id),
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    description TEXT,
+    team_lead_user_id UUID REFERENCES users(id),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(department_id, code)
+);
+```
+
+#### organization_group_designations
+```sql
+CREATE TABLE organization_group_designations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_type ENUM('department', 'team') NOT NULL,
+    group_id UUID NOT NULL, -- References either department or team
+    designation_name VARCHAR(255) NOT NULL,
+    designation_code VARCHAR(50) NOT NULL,
+    job_level INTEGER,
+    salary_grade VARCHAR(20),
+    responsibilities TEXT,
+    requirements TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(group_type, group_id, designation_code)
+);
+```
+
+#### organization_positions
+```sql
+CREATE TABLE organization_positions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_designation_id UUID NOT NULL REFERENCES organization_group_designations(id),
+    worker_seat_id UUID NOT NULL REFERENCES organization_worker_seats(id),
+    position_title VARCHAR(255) NOT NULL,
+    is_filled BOOLEAN DEFAULT false,
+    start_date DATE,
+    end_date DATE,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(worker_seat_id) -- One position per seat
+);
+```
+
+### RBAC Permission Tables
+
+#### workflow_actors
+```sql
+CREATE TABLE workflow_actors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    capabilities JSONB, -- What this actor can do
+    is_active BOOLEAN DEFAULT true
+);
+```
+
+#### workflow_permissions
+```sql
+CREATE TABLE workflow_permissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workflow_step_id UUID NOT NULL REFERENCES workflow_steps(id),
+    actor_id UUID NOT NULL REFERENCES workflow_actors(id),
+    group_type ENUM('department', 'team') NOT NULL,
+    group_id UUID NOT NULL, -- References department or team
+    designation_id UUID REFERENCES organization_group_designations(id),
+    permission_type VARCHAR(50) NOT NULL, -- 'required', 'optional', 'forbidden'
+    conditions JSONB, -- Additional conditions
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(workflow_step_id, actor_id, group_type, group_id, designation_id)
+);
+```
+
+#### user_position_assignments
+```sql
+CREATE TABLE user_position_assignments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    position_id UUID NOT NULL REFERENCES organization_positions(id),
+    assignment_type VARCHAR(50) DEFAULT 'primary', -- 'primary', 'secondary', 'temporary'
+    start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    end_date DATE,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    assigned_by UUID REFERENCES users(id),
+    INDEX idx_user_active_positions (user_id, is_active, start_date, end_date)
+);
+```
+
+### Indexing Strategy
+
+```sql
+-- Workflow performance indexes
+CREATE INDEX idx_workflow_instances_current_state ON workflow_instances(current_state);
+CREATE INDEX idx_workflow_instances_organization ON workflow_instances(organization_id, status);
+CREATE INDEX idx_workflow_history_instance_id ON workflow_history(instance_id);
+CREATE INDEX idx_workflow_history_performed_at ON workflow_history(performed_at);
+
+-- RBAC performance indexes
+CREATE INDEX CONCURRENTLY idx_user_position_assignments_active 
+ON user_position_assignments (user_id, is_active, start_date, end_date);
+
+CREATE INDEX CONCURRENTLY idx_workflow_permissions_step_actor 
+ON workflow_permissions (workflow_step_id, actor_id, is_active);
+
+CREATE INDEX CONCURRENTLY idx_workflow_permissions_group 
+ON workflow_permissions (group_type, group_id, is_active);
+
+-- Composite indexes for common queries
+CREATE INDEX idx_workflow_instances_status_created ON workflow_instances(status, created_at);
+CREATE INDEX CONCURRENTLY idx_user_active_positions_composite 
+ON user_position_assignments (user_id, is_active, assignment_type) 
+WHERE is_active = true AND (end_date IS NULL OR end_date >= CURRENT_DATE);
+
+CREATE INDEX CONCURRENTLY idx_workflow_permission_lookup 
+ON workflow_permissions (workflow_step_id, actor_id, group_type, group_id, designation_id) 
+WHERE is_active = true;
+```
+
+---
+
+## Permission Resolution & Workflow Integration
+
+### Core Permission Resolution Engine
+
+```javascript
+class RBACPermissionResolver {
+  constructor(database, cache) {
+    this.db = database;
+    this.cache = cache;
+  }
+
+  /**
+   * Check if user has permission to perform action in workflow step
+   */
+  async checkPermission(userId, workflowStepId, actorRole, context = {}) {
+    const cacheKey = `${userId}:${workflowStepId}:${actorRole}`;
+    
+    // Check cache first
+    const cached = await this.cache.getPermission(cacheKey);
+    if (cached) return cached;
+
+    try {
+      // Get user's current organizational positions
+      const userPositions = await this.getUserActivePositions(userId);
+      
+      // Get workflow step permission requirements
+      const stepPermissions = await this.getWorkflowStepPermissions(workflowStepId, actorRole);
+      
+      // Evaluate permission match
+      const permissionResult = await this.evaluatePermissions(
+        userPositions, 
+        stepPermissions, 
+        context
+      );
+
+      // Cache result
+      await this.cache.setPermission(cacheKey, permissionResult);
+
+      return permissionResult;
+    } catch (error) {
+      throw new PermissionError(`Permission check failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get user's active organization positions with full context
+   */
+  async getUserActivePositions(userId) {
+    const query = `
+      SELECT 
+        upa.id as assignment_id,
+        upa.assignment_type,
+        op.id as position_id,
+        op.position_title,
+        ogd.id as designation_id,
+        ogd.designation_name,
+        ogd.designation_code,
+        ogd.group_type,
+        ogd.group_id,
+        ogd.job_level,
+        
+        -- Department info (if group_type = 'department')
+        od.name as department_name,
+        od.code as department_code,
+        
+        -- Team info (if group_type = 'team')
+        ot.name as team_name,
+        ot.code as team_code,
+        parent_dept.name as parent_department_name,
+        
+        -- Physical location
+        ows.seat_number,
+        ob.name as building_name,
+        obr.name as branch_name,
+        org.name as organization_name
+        
+      FROM user_position_assignments upa
+      JOIN organization_positions op ON upa.position_id = op.id
+      JOIN organization_group_designations ogd ON op.group_designation_id = ogd.id
+      JOIN organization_worker_seats ows ON op.worker_seat_id = ows.id
+      JOIN organization_buildings ob ON ows.building_id = ob.id
+      JOIN organization_branches obr ON ob.branch_id = obr.id
+      JOIN organizations org ON obr.organization_id = org.id
+      
+      -- Join department or team based on group_type
+      LEFT JOIN organization_departments od ON ogd.group_type = 'department' AND ogd.group_id = od.id
+      LEFT JOIN organization_teams ot ON ogd.group_type = 'team' AND ogd.group_id = ot.id
+      LEFT JOIN organization_departments parent_dept ON ot.department_id = parent_dept.id
+      
+      WHERE upa.user_id = $1
+        AND upa.is_active = true
+        AND (upa.end_date IS NULL OR upa.end_date >= CURRENT_DATE)
+        AND upa.start_date <= CURRENT_DATE
+        AND op.is_active = true
+        AND ogd.is_active = true
+    `;
+    
+    return await this.db.query(query, [userId]);
+  }
+}
+```
+
+### Enhanced Workflow Engine with RBAC
+
+```javascript
+class EnhancedWorkflowEngine extends BaseWorkflow {
+  constructor(database, rbacResolver, eventBus, auditLogger) {
+    super();
+    this.db = database;
+    this.rbac = rbacResolver;
+    this.eventBus = eventBus;
+    this.auditLogger = auditLogger;
+  }
+
+  /**
+   * Execute workflow transition with comprehensive RBAC validation
+   */
+  async transitionWithPermissionCheck(instanceId, targetState, actorRole, userId, context = {}) {
+    const transaction = await this.db.beginTransaction();
+    
+    try {
+      // Get workflow instance and step
+      const instance = await this.getWorkflowInstance(instanceId);
+      const workflowStep = await this.getWorkflowStep(instance.workflow_id, targetState);
+      
+      // Check RBAC permissions
+      const permissionResult = await this.rbac.checkPermission(
+        userId, 
+        workflowStep.id, 
+        actorRole, 
+        { 
+          ...context, 
+          workflowData: instance.context_data,
+          workflowInstance: instance
+        }
+      );
+
+      if (!permissionResult.hasPermission) {
+        await this.auditLogger.logPermissionDenied(
+          userId, workflowStep.id, actorRole, permissionResult, context
+        );
+        
+        throw new PermissionDeniedError(
+          `User ${userId} lacks ${actorRole} permission for workflow step ${targetState}`,
+          {
+            userId,
+            workflowStepId: workflowStep.id,
+            actorRole,
+            reasons: permissionResult.reasons
+          }
+        );
+      }
+
+      // Log successful permission check
+      await this.auditLogger.logPermissionCheck(
+        instanceId, userId, workflowStep.id, actorRole, permissionResult
+      );
+
+      // Execute the transition
+      const transitionResult = await this.executeTransition(instanceId, targetState, {
+        ...context,
+        performedBy: userId,
+        actorRole: actorRole,
+        permissionContext: permissionResult.matchedPermissions
+      }, transaction);
+
+      await transaction.commit();
+
+      // Emit events
+      this.eventBus.emit('workflow.transition.completed', {
+        instanceId,
+        targetState,
+        userId,
+        actorRole,
+        permissionContext: permissionResult.matchedPermissions
+      });
+
+      return transitionResult;
+    } catch (error) {
+      await transaction.rollback();
+      
+      this.eventBus.emit('workflow.transition.failed', {
+        instanceId,
+        targetState,
+        userId,
+        actorRole,
+        error: error.message
+      });
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Get available actions for a user in current workflow state
+   */
+  async getAvailableActionsForUser(instanceId, userId) {
+    const instance = await this.getWorkflowInstance(instanceId);
+    const currentStep = await this.getCurrentWorkflowStep(instance);
+    const availableTransitions = await this.getAvailableTransitions(currentStep);
+
+    const availableActions = [];
+
+    for (const transition of availableTransitions) {
+      const targetStep = await this.getWorkflowStep(instance.workflow_id, transition.target_state);
+      
+      // Check permissions for each required actor role
+      for (const actorRole of targetStep.required_actors || []) {
+        const permissionResult = await this.rbac.checkPermission(
+          userId,
+          targetStep.id,
+          actorRole,
+          { workflowData: instance.context_data }
+        );
+
+        if (permissionResult.hasPermission) {
+          availableActions.push({
+            action: transition.action,
+            targetState: transition.target_state,
+            actorRole: actorRole,
+            stepName: targetStep.step_name,
+            permissionContext: permissionResult.matchedPermissions
+          });
+        }
+      }
+    }
+
+    return availableActions;
+  }
+}
+```
+
+---
+
+## API Architecture
+
+### RESTful API Design
+
+#### Workflow Management APIs
+
+```javascript
+// Core Workflow APIs
+GET    /api/v1/workflows
+GET    /api/v1/workflows/:id
+POST   /api/v1/workflows
+PUT    /api/v1/workflows/:id
+
+// Workflow Instance APIs
+POST   /api/v1/workflows/:id/instances
+GET    /api/v1/instances/:id
+PUT    /api/v1/instances/:id
+
+// Workflow Transition APIs (with RBAC)
+POST   /api/v1/instances/:id/transitions
+Body: { 
+  action: "approve", 
+  target_state: "approved",
+  actor_role: "approver",
+  context: {...}
+}
+
+// Permission-aware APIs
+GET    /api/v1/users/:id/available-actions?instanceId=:instanceId
+GET    /api/v1/instances/:id/eligible-users/:actorRole
+GET    /api/v1/workflow-steps/:id/permissions
+```
+
+#### Organizational Management APIs
+
+```javascript
+// Organization Structure APIs
+GET    /api/v1/organizations
+POST   /api/v1/organizations
+GET    /api/v1/organizations/:id/departments
+POST   /api/v1/organizations/:id/departments
+GET    /api/v1/departments/:id/teams
+POST   /api/v1/departments/:id/teams
+
+// Position Management APIs
+GET    /api/v1/positions
+POST   /api/v1/positions
+GET    /api/v1/users/:id/positions
+POST   /api/v1/users/:id/positions
+
+// Permission Management APIs
+GET    /api/v1/users/:id/permissions/check
+POST   /api/v1/users/:id/permissions/check
+GET    /api/v1/workflows/:id/permissions
+POST   /api/v1/workflows/:id/permissions
+```
+
+### GraphQL Schema
+
+```graphql
+type Workflow {
+  id: ID!
+  name: String!
+  description: String
+  states: [WorkflowState!]!
+  instances: [WorkflowInstance!]!
+  permissions: [WorkflowPermission!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type WorkflowInstance {
+  id: ID!
+  workflow: Workflow!
+  currentState: String!
+  context: JSON
+  initiator: User!
+  organization: Organization!
+  history: [WorkflowHistoryEntry!]!
+  availableActions(userId: ID!): [WorkflowAction!]!
+  status: WorkflowStatus!
+}
+
+type WorkflowPermission {
+  id: ID!
+  workflowStep: WorkflowStep!
+  actor: WorkflowActor!
+  organizationGroup: OrganizationGroup!
+  designation: OrganizationGroupDesignation
+  permissionType: PermissionType!
+  conditions: JSON
+}
+
+type PermissionCheckResult {
+  hasPermission: Boolean!
+  matchedPermissions: [MatchedPermission!]!
+  reasons: [String!]!
+  userPositions: [UserPosition!]!
+  contextualChecks: ContextualCheckResult
+}
+
+type Organization {
+  id: ID!
+  name: String!
+  code: String!
+  branches: [OrganizationBranch!]!
+  departments: [OrganizationDepartment!]!
+}
+
+type Query {
+  # Workflow queries
+  workflow(id: ID!): Workflow
+  workflows(filters: WorkflowFilters): [Workflow!]!
+  workflowInstance(id: ID!): WorkflowInstance
+  
+  # Permission queries
+  userPermissions(
+    userId: ID!, 
+    workflowStepId: ID!, 
+    actorRole: String!,
+    context: JSON
+  ): PermissionCheckResult!
+  
+  userAvailableActions(userId: ID!, instanceId: ID!): [WorkflowAction!]!
+  eligibleUsers(workflowStepId: ID!, actorRole: String!): [User!]!
+  
+  # Organization queries
+  organization(id: ID!): Organization
+  userOrganizationalContext(userId: ID!): UserOrganizationalContext
+}
+
+type Mutation {
+  # Workflow mutations
+  createWorkflowInstance(input: CreateWorkflowInstanceInput!): WorkflowInstance!
+  transitionWorkflow(input: TransitionWorkflowInput!): WorkflowTransitionResult!
+  
+  # Position management
+  assignUserToPosition(input: AssignUserToPositionInput!): UserPositionAssignment!
+  
+  # Permission management
+  createWorkflowPermission(input: CreateWorkflowPermissionInput!): WorkflowPermission!
+}
+
+type Subscription {
+  workflowStateChanged(instanceId: ID!): WorkflowInstance!
+  permissionChanged(userId: ID!): PermissionChangeEvent!
+  taskAssigned(userId: ID!): WorkflowTask!
+}
+```
+
+---
+
+## Event-Driven Communication
+
+### Event Architecture with RBAC Integration
+
+#### Event Types
+
+```javascript
+// Workflow Events
+const WorkflowEvents = {
+  STATE_CHANGED: 'workflow.state.changed',
+  INSTANCE_CREATED: 'workflow.instance.created', 
+  INSTANCE_COMPLETED: 'workflow.instance.completed',
+  VALIDATION_FAILED: 'workflow.validation.failed',
+  PERMISSION_DENIED: 'workflow.permission.denied',
+  TRANSITION_COMPLETED: 'workflow.transition.completed'
+};
+
+// RBAC Events
+const RBACEvents = {
+  PERMISSION_CHECKED: 'rbac.permission.checked',
+  PERMISSION_DENIED: 'rbac.permission.denied',
+  POSITION_ASSIGNED: 'rbac.position.assigned',
+  POSITION_UPDATED: 'rbac.position.updated',
+  ORGANIZATION_CHANGED: 'rbac.organization.changed'
+};
+
+// Task Events  
+const TaskEvents = {
+  TASK_CREATED: 'task.created',
+  TASK_ASSIGNED: 'task.assigned',
+  TASK_COMPLETED: 'task.completed',
+  TASK_OVERDUE: 'task.overdue'
+};
+
+// Integration Events
+const IntegrationEvents = {
+  NOTIFICATION_SENT: 'notification.sent',
+  EMAIL_DELIVERED: 'email.delivered', 
+  EXTERNAL_API_CALLED: 'external.api.called',
+  AUDIT_LOG_CREATED: 'audit.log.created'
+};
+```
+
+#### Event Structure
+
+```javascript
+class WorkflowEvent {
+  constructor(type, payload) {
+    this.id = generateUUID();
+    this.type = type;
+    this.payload = payload;
+    this.timestamp = new Date();
+    this.version = '2.0';
+    this.correlationId = payload.correlationId;
+    this.userId = payload.userId;
+    this.organizationId = payload.organizationId;
+    this.securityContext = payload.securityContext;
+  }
+}
+```
+
+#### Enhanced Event Handlers
+
+```javascript
+class WorkflowEventHandler {
+  constructor(eventBus, notificationService, auditService, rbacResolver) {
+    this.eventBus = eventBus;
+    this.notificationService = notificationService;
+    this.auditService = auditService;
+    this.rbac = rbacResolver;
+    
+    this.setupEventListeners();
+  }
+  
+  setupEventListeners() {
+    this.eventBus.on(WorkflowEvents.STATE_CHANGED, this.handleStateChanged.bind(this));
+    this.eventBus.on(WorkflowEvents.PERMISSION_DENIED, this.handlePermissionDenied.bind(this));
+    this.eventBus.on(RBACEvents.POSITION_ASSIGNED, this.handlePositionAssigned.bind(this));
+    this.eventBus.on(TaskEvents.TASK_ASSIGNED, this.handleTaskAssigned.bind(this));
+  }
+  
+  async handleStateChanged(event) {
+    // Log state change with full context
+    await this.auditService.logStateChange(event);
+    
+    // Check who should be notified based on new state permissions
+    const eligibleUsers = await this.rbac.getEligibleUsersForState(
+      event.payload.workflowStepId,
+      event.payload.nextRequiredActors
+    );
+    
+    // Send notifications to eligible users only
+    await this.notificationService.notifyEligibleUsers(event, eligibleUsers);
+    
+    // Update metrics
+    await this.updateMetrics(event);
+  }
+  
+  async handlePermissionDenied(event) {
+    // Log security incident
+    await this.auditService.logSecurityIncident({
+      type: 'permission_denied',
+      userId: event.payload.userId,
+      resource: event.payload.resource,
+      attempted_action: event.payload.action,
+      timestamp: event.timestamp
+    });
+    
+    // Check if this indicates a potential security issue
+    await this.securityAnalysis.analyzePermissionDenial(event);
+  }
+  
+  async handlePositionAssigned(event) {
+    // Invalidate user's permission cache
+    await this.rbac.cache.invalidateUserPermissions(event.payload.userId);
+    
+    // Recalculate user's available workflow actions
+    await this.recalculateUserWorkflowAccess(event.payload.userId);
+    
+    // Notify user of new access
+    await this.notificationService.notifyAccessChange(event);
+  }
+}
+```
+
+---
+
+## Scalability & Performance
+
+### Horizontal Scaling Strategy
+
+#### Microservices Architecture with RBAC
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  Workflow       │    │  RBAC           │    │  Organization   │
+│  Service        │    │  Service        │    │  Service        │
+│                 │    │                 │    │                 │
+│ - State mgmt    │    │ - Permissions   │    │ - Org structure │
+│ - Transitions   │    │ - Position mgmt │    │ - User positions│
+│ - Validations   │    │ - Context eval  │    │ - Dept/Teams    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │
+         ┌─────────────────┐     │     ┌─────────────────┐
+         │  Event Bus      │─────┼─────│  API Gateway    │
+         │  Service        │     │     │                 │
+         │                 │     │     │ - Rate limiting │
+         │ - Event routing │     │     │ - Auth/AuthZ    │
+         │ - Message queue │     │     │ - Load balancing│
+         └─────────────────┘     │     └─────────────────┘
+                                 │
+         ┌─────────────────┐     │     ┌─────────────────┐
+         │  Audit          │─────┘     │  Notification   │
+         │  Service        │           │  Service        │
+         │                 │           │                 │
+         │ - History logs  │           │ - Multi-channel │
+         │ - Compliance    │           │ - Templates     │
+         │ - Security      │           │ - Delivery      │
+         └─────────────────┘           └─────────────────┘
+```
+
+### Performance Optimization
+
+#### Multi-Level Caching Strategy
+
+```javascript
+class EnhancedPermissionCache {
+  constructor(redisClient, localCache) {
+    this.redis = redisClient;
+    this.local = localCache;
+    this.localTTL = 60; // 1 minute
+    this.redisTTL = 300; // 5 minutes
+  }
+
+  async getPermission(cacheKey) {
+    // Level 1: Local cache (fastest)
+    let result = this.local.get(cacheKey);
+    if (result) return result;
+
+    // Level 2: Redis cache (fast)
+    const redisResult = await this.redis.get(`perm:${cacheKey}`);
+    if (redisResult) {
+      result = JSON.parse(redisResult);
+      this.local.set(cacheKey, result, this.localTTL);
+      return result;
+    }
+
+    return null;
+  }
+
+  async setPermission(cacheKey, permissionResult) {
+    // Set in both caches
+    this.local.set(cacheKey, permissionResult, this.localTTL);
+    await this.redis.setex(`perm:${cacheKey}`, this.redisTTL, JSON.stringify(permissionResult));
+  }
+
+  async invalidateUserPermissions(userId) {
+    // Clear local cache
+    this.local.flushAll();
+    
+    // Clear Redis cache with pattern
+    const keys = await this.redis.keys(`perm:${userId}:*`);
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
+    }
+  }
+}
+```
+
+#### Database Optimization
+
+```javascript
+class OptimizedRBACQueries {
+  constructor(database) {
+    this.db = database;
+  }
+
+  async initializePreparedStatements() {
+    // High-performance prepared statements for permission resolution
+    await this.db.prepare('get_user_positions_fast', `
+      SELECT 
+        upa.assignment_type,
+        ogd.id as designation_id, 
+        ogd.group_type, 
+        ogd.group_id, 
+        ogd.job_level,
+        ogd.designation_code
+      FROM user_position_assignments upa
+      JOIN organization_positions op ON upa.position_id = op.id
+      JOIN organization_group_designations ogd ON op.group_designation_id = ogd.id
+      WHERE upa.user_id = $1 
+        AND upa.is_active = true 
+        AND (upa.end_date IS NULL OR upa.end_date >= CURRENT_DATE)
+    `);
+
+    await this.db.prepare('get_workflow_permissions_fast', `
+      SELECT 
+        wp.group_type, 
+        wp.group_id, 
+        wp.designation_id, 
+        wp.conditions
+      FROM workflow_permissions wp
+      JOIN workflow_actors wa ON wp.actor_id = wa.id
+      WHERE wp.workflow_step_id = $1 
+        AND wa.name = $2 
+        AND wp.is_active = true
+    `);
+  }
+}
+```
+
+---
+
+## Security & Audit
+
+### Security Architecture
+
+#### Comprehensive Audit Logging
+
+```javascript
+class EnhancedAuditLogger {
+  constructor(database, eventBus, encryption) {
+    this.db = database;
+    this.eventBus = eventBus;
+    this.encryption = encryption;
+  }
+
+  async logPermissionCheck(instanceId, userId, workflowStepId, actorRole, result, context = {}) {
+    const auditEntry = {
+      id: generateUUID(),
+      event_type: 'permission_check',
+      user_id: userId,
+      resource_type: 'workflow_step',
+      resource_id: workflowStepId,
+      action: actorRole,
+      result: result.hasPermission ? 'granted' : 'denied',
+      details: await this.encryption.encrypt(JSON.stringify({
+        matched_permissions: result.matchedPermissions,
+        reasons: result.reasons,
+        user_positions: result.userPositions,
+        context: context
+      })),
+      workflow_instance_id: instanceId,
+      ip_address: context.ipAddress,
+      user_agent: context.userAgent,
+      session_id: context.sessionId,
+      timestamp: new Date()
+    };
+
+    await this.db.create('audit_logs', auditEntry);
+    
+    this.eventBus.emit('audit.permission_check', auditEntry);
+  }
+
+  async logWorkflowTransition(instanceId, fromState, toState, userId, actorRole, context) {
+    const auditEntry = {
+      id: generateUUID(),
+      event_type: 'workflow_transition',
+      user_id: userId,
+      resource_type: 'workflow_instance',
+      resource_id: instanceId,
+      action: `transition_${fromState}_to_${toState}`,
+      result: 'success',
+      details: await this.encryption.encrypt(JSON.stringify({
+        from_state: fromState,
+        to_state: toState,
+        actor_role: actorRole,
+        context: context
+      })),
+      timestamp: new Date()
+    };
+
+    await this.db.create('audit_logs', auditEntry);
+    
+    this.eventBus.emit('audit.workflow_transition', auditEntry);
+  }
+
+  async generateComplianceReport(startDate, endDate, filters = {}) {
+    let query = `
+      SELECT 
+        event_type,
+        result,
+        COUNT(*) as event_count,
+        COUNT(DISTINCT user_id) as unique_users,
+        DATE_TRUNC('day', timestamp) as event_date
+      FROM audit_logs
+      WHERE timestamp BETWEEN $1 AND $2
+    `;
+
+    const params = [startDate, endDate];
+
+    if (filters.userId) {
+      query += ` AND user_id = $${params.length + 1}`;
+      params.push(filters.userId);
+    }
+
+    if (filters.eventType) {
+      query += ` AND event_type = $${params.length + 1}`;
+      params.push(filters.eventType);
+    }
+
+    if (filters.organizationId) {
+      query += ` AND EXISTS (
+        SELECT 1 FROM workflow_instances wi 
+        WHERE wi.id = audit_logs.workflow_instance_id 
+        AND wi.organization_id = $${params.length + 1}
+      )`;
+      params.push(filters.organizationId);
+    }
+
+    query += ` GROUP BY event_type, result, event_date 
+               ORDER BY event_date DESC, event_type`;
+
+    return await this.db.query(query, params);
+  }
+}
+```
+
+#### Security Monitoring
+
+```javascript
+class SecurityMonitor {
+  constructor(auditLogger, alertService) {
+    this.auditLogger = auditLogger;
+    this.alertService = alertService;
+    this.suspiciousActivityThresholds = {
+      permission_denials_per_hour: 10,
+      rapid_transitions_per_minute: 5,
+      unusual_time_access: { start: 22, end: 6 } // 10 PM to 6 AM
+    };
+  }
+
+  async analyzeSecurityEvent(event) {
+    switch (event.type) {
+      case 'permission_denied':
+        await this.analyzePermissionDenial(event);
+        break;
+      case 'workflow_transition':
+        await this.analyzeWorkflowTransition(event);
+        break;
+      case 'login_attempt':
+        await this.analyzeLoginAttempt(event);
+        break;
+    }
+  }
+
+  async analyzePermissionDenial(event) {
+    const recentDenials = await this.auditLogger.getRecentEvents(
+      event.userId, 
+      'permission_denied', 
+      3600000 // 1 hour
+    );
+
+    if (recentDenials.length >= this.suspiciousActivityThresholds.permission_denials_per_hour) {
+      await this.alertService.sendSecurityAlert({
+        type: 'excessive_permission_denials',
+        userId: event.userId,
+        count: recentDenials.length,
+        timeframe: '1 hour',
+        severity: 'medium'
+      });
+    }
+  }
+
+  async analyzeWorkflowTransition(event) {
+    const currentHour = new Date().getHours();
+    const { start, end } = this.suspiciousActivityThresholds.unusual_time_access;
+    
+    if (currentHour >= start || currentHour <= end) {
+      await this.alertService.sendSecurityAlert({
+        type: 'after_hours_workflow_activity',
+        userId: event.userId,
+        action: event.action,
+        time: new Date(),
+        severity: 'low'
+      });
+    }
+  }
+}
+```
+
+---
+
+## Integration Patterns
+
+### External System Integration with RBAC
+
+#### API Integration with Permission Context
+
+```javascript
+class SecureExternalApiIntegration {
+  constructor(apiConfig, rbacResolver) {
+    this.client = new HttpClient(apiConfig);
+    this.rbac = rbacResolver;
+    this.retryPolicy = new ExponentialBackoff();
+  }
+  
+  async callExternalApi(endpoint, data, userId, requiredPermission) {
+    try {
+      // Check if user has permission to call external API
+      const hasPermission = await this.rbac.checkExternalApiPermission(
+        userId, 
+        endpoint, 
+        requiredPermission
+      );
+      
+      if (!hasPermission) {
+        throw new PermissionDeniedError(`User ${userId} cannot access external API ${endpoint}`);
+      }
+
+      const response = await this.retryPolicy.execute(
+        () => this.client.post(endpoint, data, {
+          headers: {
+            'X-User-Context': await this.getUserContext(userId),
+            'X-Organization-Context': await this.getOrganizationContext(userId)
+          }
+        })
+      );
+      
+      this.emitEvent('external.api.success', { 
+        endpoint, 
+        userId, 
+        response: response.status 
+      });
+      
+      return response.data;
+    } catch (error) {
+      this.emitEvent('external.api.error', { 
+        endpoint, 
+        userId, 
+        error: error.message 
+      });
+      throw error;
+    }
+  }
+}
+```
+
+#### Webhook Integration with Security
+
+```javascript
+class SecureWebhookManager {
+  constructor(eventBus, rbacResolver) {
+    this.eventBus = eventBus;
+    this.rbac = rbacResolver;
+    this.webhooks = new Map();
+  }
+  
+  async registerWebhook(eventType, webhookUrl, organizationId, requiredPermission) {
+    // Validate webhook registration permissions
+    const webhook = {
+      url: webhookUrl,
+      organizationId: organizationId,
+      requiredPermission: requiredPermission,
+      headers: await this.generateSecureHeaders(organizationId)
+    };
+    
+    if (!this.webhooks.has(eventType)) {
+      this.webhooks.set(eventType, []);
+    }
+    
+    this.webhooks.get(eventType).push(webhook);
+    
+    this.eventBus.on(eventType, async (event) => {
+      // Only deliver webhook if organization matches and permissions are valid
+      if (event.organizationId === organizationId) {
+        await this.deliverSecureWebhook(webhook, event);
+      }
+    });
+  }
+  
+  async deliverSecureWebhook(webhook, event) {
+    try {
+      // Add security context to webhook payload
+      const securePayload = {
+        ...event,
+        organizationContext: await this.getOrganizationContext(webhook.organizationId),
+        signature: await this.generateWebhookSignature(event, webhook.secret)
+      };
+      
+      await this.httpClient.post(webhook.url, securePayload, {
+        headers: webhook.headers
+      });
+      
+    } catch (error) {
+      this.auditLogger.logWebhookFailure(webhook, event, error);
+    }
+  }
+}
+```
+
+---
+
+## Development Guidelines
+
+### Secure Development Practices
+
+#### Code Organization with Security Layers
+
+```
+src/
+├── workflows/
+│   ├── base/
+│   │   ├── BaseWorkflow.js
+│   │   ├── SecureStateNode.js
+│   │   └── EnhancedWorkflowEngine.js
+│   ├── implementations/
+│   │   ├── HireWorkflow.js
+│   │   ├── ApprovalWorkflow.js
+│   │   └── DocumentWorkflow.js
+│   └── security/
+│       ├── PermissionValidators.js
+│       └── WorkflowSecurityMiddleware.js
+├── rbac/
+│   ├── PermissionResolver.js
+│   ├── OrganizationManager.js
+│   ├── PositionService.js
+│   └── SecurityAnalyzer.js
+├── events/
+│   ├── SecureEventBus.js
+│   ├── EventHandlers.js
+│   └── EventTypes.js
+├── api/
+│   ├── controllers/
+│   ├── middleware/
+│   │   ├── AuthenticationMiddleware.js
+│   │   ├── AuthorizationMiddleware.js
+│   │   └── AuditMiddleware.js
+│   └── routes/
+├── database/
+│   ├── models/
+│   ├── migrations/
+│   ├── seeds/
+│   └── security/
+│       ├── EncryptionService.js
+│       └── DataMasking.js
+└── services/
+    ├── NotificationService.js
+    ├── AuditService.js
+    └── SecurityMonitorService.js
+```
+
+#### Security Coding Standards
+
+```javascript
+// Always validate permissions before any workflow operation
+class SecureWorkflowController {
+  async transitionWorkflow(req, res) {
+    try {
+      // 1. Authenticate user
+      const user = await this.authService.validateToken(req.headers.authorization);
+      
+      // 2. Validate input
+      const { instanceId, targetState, actorRole } = this.validateInput(req.body);
+      
+      // 3. Check permissions
+      const hasPermission = await this.rbacResolver.checkPermission(
+        user.id,
+        instanceId,
+        actorRole,
+        {
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          sessionId: req.sessionID
+        }
+      );
+      
+      if (!hasPermission) {
+        return res.status(403).json({
+          error: 'Insufficient permissions',
+          code: 'PERMISSION_DENIED'
+        });
+      }
+      
+      // 4. Execute operation with audit trail
+      const result = await this.workflowEngine.transitionWithPermissionCheck(
+        instanceId,
+        targetState,
+        actorRole,
+        user.id,
+        req.body.context
+      );
+      
+      res.json({ success: true, data: result });
+      
+    } catch (error) {
+      await this.auditLogger.logError(error, req);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+}
+```
+
+---
+
+## Testing Strategy
+
+### Comprehensive Testing with Security Focus
+
+#### RBAC Testing
+
+```javascript
+describe('RBAC Integration Tests', () => {
+  let workflowEngine;
+  let rbacResolver;
+  let database;
+  
+  beforeAll(async () => {
+    database = await setupTestDatabase();
+    rbacResolver = new RBACPermissionResolver(database);
+    workflowEngine = new EnhancedWorkflowEngine(database, rbacResolver);
+    
+    // Setup test organization structure
+    await setupTestOrganization();
+  });
+  
+  describe('Permission Checks', () => {
+    test('should allow authorized workflow transitions', async () => {
+      // Create test user with HR Manager position
+      const userId = await createTestUser();
+      await assignUserToPosition(userId, 'hr_manager', 'human_resources');
+      
+      // Create workflow instance
+      const instanceId = await workflowEngine.createInstance('hire_workflow', {
+        position: 'Software Engineer'
+      });
+      
+      // Should allow HR Manager to approve requisition
+      const result = await workflowEngine.transitionWithPermissionCheck(
+        instanceId,
+        'requisition_approved',
+        'approver',
+        userId
+      );
+      
+      expect(result.success).toBe(true);
+      expect(result.newState).toBe('requisition_approved');
+    });
+    
+    test('should deny unauthorized workflow transitions', async () => {
+      // Create test user with regular employee position
+      const userId = await createTestUser();
+      await assignUserToPosition(userId, 'software_developer', 'engineering');
+      
+      const instanceId = await workflowEngine.createInstance('hire_workflow');
+      
+      // Should deny regular employee from approving requisition
+      await expect(
+        workflowEngine.transitionWithPermissionCheck(
+          instanceId,
+          'requisition_approved',
+          'approver',
+          userId
+        )
+      ).rejects.toThrow('Insufficient permissions');
+    });
+    
+    test('should handle contextual permissions correctly', async () => {
+      const userId = await createTestUser();
+      await assignUserToPosition(userId, 'department_manager', 'engineering');
+      
+      const instanceId = await workflowEngine.createInstance('expense_approval', {
+        amount: 75000, // High value requiring director approval
+        department: 'engineering'
+      });
+      
+      // Should deny manager for high-value expenses
+      await expect(
+        workflowEngine.transitionWithPermissionCheck(
+          instanceId,
+          'approved',
+          'approver',
+          userId
+        )
+      ).rejects.toThrow('Amount exceeds manager approval limit');
+    });
+  });
+  
+  describe('Organizational Changes', () => {
+    test('should update permissions when user position changes', async () => {
+      const userId = await createTestUser();
+      await assignUserToPosition(userId, 'software_developer', 'engineering');
+      
+      // Initial permission check - should fail
+      const initialCheck = await rbacResolver.checkPermission(
+        userId,
+        'approve_budget',
+        'approver'
+      );
+      expect(initialCheck.hasPermission).toBe(false);
+      
+      // Promote user to manager
+      await assignUserToPosition(userId, 'engineering_manager', 'engineering');
+      
+      // Permission check should now succeed
+      const updatedCheck = await rbacResolver.checkPermission(
+        userId,
+        'approve_budget',
+        'approver'
+      );
+      expect(updatedCheck.hasPermission).toBe(true);
+    });
+  });
+});
+```
+
+#### Security Testing
+
+```javascript
+describe('Security Tests', () => {
+  test('should log all permission denials', async () => {
+    const userId = await createTestUser();
+    const auditLogsBefore = await getAuditLogCount('permission_denied');
+    
+    try {
+      await workflowEngine.transitionWithPermissionCheck(
+        'test-instance',
+        'approved',
+        'approver',
+        userId
+      );
+    } catch (error) {
+      // Expected to fail
+    }
+    
+    const auditLogsAfter = await getAuditLogCount('permission_denied');
+    expect(auditLogsAfter).toBe(auditLogsBefore + 1);
+  });
+  
+  test('should prevent privilege escalation', async () => {
+    const userId = await createTestUser();
+    await assignUserToPosition(userId, 'software_developer', 'engineering');
+    
+    // Attempt to directly modify user's role in database
+    await database.query(
+      'UPDATE organization_group_designations SET job_level = 10 WHERE id = ?',
+      [await getUserDesignationId(userId)]
+    );
+    
+    // Permission check should still use cached/validated data
+    const permissionCheck = await rbacResolver.checkPermission(
+      userId,
+      'approve_budget',
+      'approver'
+    );
+    
+    expect(permissionCheck.hasPermission).toBe(false);
+  });
+});
+```
+
+---
+
+## Deployment Architecture
+
+### Containerized Deployment with Security
+
+#### Dockerfile with Security Best Practices
+
+```dockerfile
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+FROM node:18-alpine AS runtime
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S workflow -u 1001
+
+WORKDIR /app
+
+# Copy application files
+COPY --from=builder --chown=workflow:nodejs /app/node_modules ./node_modules
+COPY --chown=workflow:nodejs src/ ./src/
+COPY --chown=workflow:nodejs config/ ./config/
+
+# Switch to non-root user
+USER workflow
+
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node src/health-check.js
+
+CMD ["node", "src/index.js"]
+```
+
+#### Kubernetes Deployment with RBAC
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workflow-service
+  labels:
+    app: workflow-service
+    version: v2.0
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: workflow-service
+  template:
+    metadata:
+      labels:
+        app: workflow-service
+        version: v2.0
+    spec:
+      serviceAccountName: workflow-service-account
+      containers:
+      - name: workflow-api
+        image: workflow-service:2.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: workflow-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: workflow-secrets
+              key: redis-url
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: workflow-secrets
+              key: encryption-key
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: var-cache
+          mountPath: /var/cache
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: var-cache
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workflow-service-account
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workflow-service-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workflow-service-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workflow-service-role
+subjects:
+- kind: ServiceAccount
+  name: workflow-service-account
+```
+
+---
+
+## Monitoring & Observability
+
+### Comprehensive Monitoring with Security Metrics
+
+#### Application Metrics
+
+```javascript
+const prometheus = require('prom-client');
+
+// Workflow metrics
+const workflowTransitions = new prometheus.Counter({
+  name: 'workflow_transitions_total',
+  help: 'Total number of workflow state transitions',
+  labelNames: ['workflow_type', 'from_state', 'to_state', 'status', 'organization']
+});
+
+const workflowDuration = new prometheus.Histogram({
+  name: 'workflow_duration_seconds',
+  help: 'Time taken to complete workflows',
+  labelNames: ['workflow_type', 'organization'],
+  buckets: [1, 5, 15, 30, 60, 300, 600, 1800, 3600, 7200]
+});
+
+// RBAC metrics
+const permissionChecks = new prometheus.Counter({
+  name: 'rbac_permission_checks_total',
+  help: 'Total number of permission checks',
+  labelNames: ['result', 'actor_role', 'organization', 'workflow_type']
+});
+
+const permissionCheckDuration = new prometheus.Histogram({
+  name: 'rbac_permission_check_duration_seconds',
+  help: 'Time taken for permission checks',
+  labelNames: ['result', 'cache_hit'],
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
+});
+
+// Security metrics
+const securityEvents = new prometheus.Counter({
+  name: 'security_events_total',
+  help: 'Total number of security events',
+  labelNames: ['event_type', 'severity', 'organization']
+});
+
+const activeUsers = new prometheus.Gauge({
+  name: 'workflow_active_users',
+  help: 'Number of active users in workflow system',
+  labelNames: ['organization']
+});
+
+// Usage in workflow code
+class BaseWorkflow {
+  setState(stateName, context) {
+    const startTime = Date.now();
+    const previousState = this.currentState;
+    
+    // ... transition logic
+    
+    // Record metrics
+    workflowTransitions.inc({
+      workflow_type: this.constructor.name,
+      from_state: previousState,
+      to_state: stateName,
+      status: 'success',
+      organization: context.organizationId
+    });
+    
+    const duration = (Date.now() - startTime) / 1000;
+    workflowDuration.observe({
+      workflow_type: this.constructor.name,
+      organization: context.organizationId
+    }, duration);
+  }
+}
+```
+
+#### Security Monitoring Dashboard
+
+```javascript
+class SecurityDashboard {
+  constructor(metricsCollector, alertManager) {
+    this.metrics = metricsCollector;
+    this.alerts = alertManager;
+  }
+
+  async generateSecurityReport() {
+    const report = {
+      permission_denials: await this.metrics.getPermissionDenials(),
+      suspicious_activities: await this.metrics.getSuspiciousActivities(),
+      user_access_patterns: await this.metrics.getUserAccessPatterns(),
+      workflow_security_events: await this.metrics.getWorkflowSecurityEvents(),
+      compliance_metrics: await this.metrics.getComplianceMetrics()
+    };
+
+    // Check for security thresholds
+    if (report.permission_denials.last_hour > 100) {
+      await this.alerts.sendAlert({
+        type: 'security',
+        severity: 'high',
+        message: 'Unusual number of permission denials detected'
+      });
+    }
+
+    return report;
+  }
+}
+```
+
+---
+
+## Migration Strategy
+
+### Comprehensive Migration Plan
+
+#### Migration from Legacy Systems
+
+```javascript
+class ComprehensiveMigrator {
+  constructor(legacyDb, newDb, rbacResolver) {
+    this.legacy = legacyDb;
+    this.new = newDb;
+    this.rbac = rbacResolver;
+  }
+
+  async migrateComplete() {
+    const migrationPlan = [
+      { step: 'organizations', fn: this.migrateOrganizations },
+      { step: 'users', fn: this.migrateUsers },
+      { step: 'roles', fn: this.migrateRolesToPositions },
+      { step: 'workflows', fn: this.migrateWorkflows },
+      { step: 'permissions', fn: this.migratePermissions },
+      { step: 'audit_logs', fn: this.migrateAuditLogs },
+      { step: 'validation', fn: this.validateMigration }
+    ];
+
+    const results = {};
+
+    for (const { step, fn } of migrationPlan) {
+      console.log(`Starting migration step: ${step}`);
+      try {
+        results[step] = await fn.call(this);
+        console.log(`Completed migration step: ${step}`);
+      } catch (error) {
+        console.error(`Failed migration step: ${step}`, error);
+        throw new MigrationError(`Migration failed at step: ${step}`, error);
+      }
+    }
+
+    return results;
+  }
+
+  async migrateOrganizations() {
+    const legacyOrgs = await this.legacy.query('SELECT * FROM companies');
+    const migratedCount = 0;
+
+    for (const org of legacyOrgs) {
+      const newOrg = {
+        name: org.company_name,
+        code: org.company_code || this.generateOrgCode(org.company_name),
+        description: org.description,
+        is_active: org.status === 'active'
+      };
+
+      await this.new.create('organizations', newOrg);
+      migratedCount++;
+    }
+
+    return { migrated: migratedCount, total: legacyOrgs.length };
+  }
+
+  async migrateRolesToPositions() {
+    const legacyRoles = await this.legacy.query(`
+      SELECT ur.*, u.company_id, r.role_name, r.permissions
+      FROM user_roles ur
+      JOIN users u ON ur.user_id = u.id
+      JOIN roles r ON ur.role_id = r.id
+    `);
+
+    const migrationMapping = {
+      'admin': { department: 'administration', designation: 'system_administrator', level: 10 },
+      'hr_manager': { department: 'human_resources', designation: 'hr_manager', level: 8 },
+      'department_head': { department: 'management', designation: 'department_head', level: 9 },
+      'employee': { department: 'general', designation: 'employee', level: 3 }
+    };
+
+    for (const role of legacyRoles) {
+      const mapping = migrationMapping[role.role_name];
+      if (!mapping) continue;
+
+      // Create or find department
+      const department = await this.findOrCreateDepartment(
+        role.company_id, 
+        mapping.department
+      );
+
+      // Create or find designation
+      const designation = await this.findOrCreateDesignation(
+        department.id, 
+        mapping.designation, 
+        mapping.level
+      );
+
+      // Find available worker seat
+      const workerSeat = await this.findOrCreateWorkerSeat(role.company_id);
+
+      // Create position
+      const position = await this.createPosition(designation.id, workerSeat.id);
+
+      // Assign user to position
+      await this.assignUserToPosition(role.user_id, position.id, 'primary');
+    }
+
+    return { migrated: legacyRoles.length };
+  }
+
+  async validateMigration() {
+    const validation = {
+      organizations: await this.validateOrganizations(),
+      users: await this.validateUsers(),
+      positions: await this.validatePositions(),
+      permissions: await this.validatePermissions(),
+      workflows: await this.validateWorkflows()
+    };
+
+    const hasErrors = Object.values(validation).some(v => v.errors.length > 0);
+    
+    if (hasErrors) {
+      throw new MigrationValidationError('Migration validation failed', validation);
+    }
+
+    return validation;
+  }
+
+  async validatePermissions() {
+    const sampleUsers = await this.new.query(`
+      SELECT u.id, u.email 
+      FROM users u 
+      JOIN user_position_assignments upa ON u.id = upa.user_id 
+      WHERE upa.is_active = true 
+      LIMIT 10
+    `);
+
+    const permissionTests = [];
+
+    for (const user of sampleUsers) {
+      try {
+        const userContext = await this.rbac.getUserActivePositions(user.id);
+        permissionTests.push({
+          userId: user.id,
+          email: user.email,
+          hasPositions: userContext.length > 0,
+          primaryPosition: userContext.find(p => p.assignment_type === 'primary'),
+          status: 'success'
+        });
+      } catch (error) {
+        permissionTests.push({
+          userId: user.id,
+          email: user.email,
+          status: 'error',
+          error: error.message
+        });
+      }
+    }
+
+    return {
+      tested: permissionTests.length,
+      passed: permissionTests.filter(t => t.status === 'success').length,
+      failed: permissionTests.filter(t => t.status === 'error').length,
+      errors: permissionTests.filter(t => t.status === 'error')
+    };
+  }
+}
+```
+
+---
+
+## Conclusion
+
+This comprehensive workflow system architecture with enhanced RBAC provides a robust, scalable foundation for enterprise-grade workflow management. The integrated approach ensures that security, performance, and maintainability are built into every layer of the system.
+
+### Key Benefits
+
+1. **Enterprise Security**: Multi-dimensional RBAC with comprehensive audit trails
+2. **Organizational Alignment**: Models real-world organizational structures accurately
+3. **Scalable Architecture**: Microservices design with horizontal scaling capabilities
+4. **Comprehensive Monitoring**: Security-focused observability and compliance reporting
+5. **Maintainable Codebase**: Clear separation of concerns with security integration
+6. **Flexible Workflows**: Extensible workflow patterns that adapt to business needs
+
+### Advanced Capabilities
+
+- **Context-Aware Permissions**: Dynamic permission evaluation based on workflow data and business rules
+- **Real-time Security Monitoring**: Automated detection of suspicious activities and security incidents
+- **Compliance-Ready Auditing**: Complete audit trails for regulatory compliance
+- **Performance Optimization**: Multi-level caching and optimized database access patterns
+- **Integration-Friendly**: Secure APIs and event-driven architecture for system integration
+
+### Implementation Readiness
+
+This architecture provides:
+- Complete database schemas with proper indexing
+- Production-ready code examples with security best practices
+- Comprehensive testing strategies including security testing
+- Deployment configurations with container security
+- Migration strategies from legacy systems
+
+The system is designed to handle complex enterprise requirements while maintaining the flexibility to adapt to changing organizational needs and security requirements. It serves as a comprehensive blueprint for implementing workflow management systems that meet both functional and security requirements at enterprise scale.
